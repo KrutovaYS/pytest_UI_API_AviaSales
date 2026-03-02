@@ -15,41 +15,46 @@ class MainPage:
     """
     Класс для работы с главной страницей Aviasales.
     """
+    COOKIE_ACCEPT_BUTTON = (By.XPATH, "//button[@data-test-id='accept-cookies-button']") # Локатор кнопки принятия куки
     ORIGIN_INPUT = (By.XPATH, "//input[@data-test-id='origin-input']")  # Откуда
     DESTINATION_INPUT = (By.XPATH, "//input[@data-test-id='destination-input']")  # Куда
     DATE_START = (By.XPATH, "//button[@data-test-id='start-date-field']")  # Дата вылета
-    DATE_CLICK = (By.XPATH, "//button[@aria-label='четверг, 19 марта 2026 г.']")  ## убрать, не использую
     DATE_END = (By.CSS_SELECTOR, "[data-test-id='end-date-value']")  # Дата возвращения/прибытия
     SEARCH_BUTTON = (By.XPATH, "//button[@data-test-id='form-submit']")  # Кнопка поиска
+    PASSENGERS_FIELD = (By.XPATH, "//button[@data-test-id='passengers-field']")  # Открыть меню с выбором количества пассажиров
+    INFANTS_PLUS_BUTTON = (By.XPATH, "(//button[@data-test-id='increase-button'])[3]")  # Кнопка плюс добавление младенца
+    # INFANTS_COINS = (By.XPATH, "(//div[@data-test-id='passenger-number'])")
+    INFANTS_COUNS = (By.XPATH, "//div[@data-test-id='number-of-infants']//div[@data-test-id='passenger-number']")
 
     # Дополнительные локаторы для выпадающих списков
     DATE_CALENDAR = (By.XPATH, "//div[@data-test-id='dropdown']")  # выпадающий календарь для выбора дат вылета/прилета
     DATE_DAY_IN_CALENDAR = (By.XPATH, "//div[@data-test-id='date-19.03.2026']")  # дата вылета в календаре
-    ORIGIN_SUGGEST = (By.XPATH, "//ul[@id='avia_form_origin-menu']")  # работает - оставляем 
-    DESTINATION_SUGGEST = (By.CSS_SELECTOR, "ul.suggest__list li:first-child")  # Пробуем этот локатор по аналогии с origin, его не нашла
-
-     # Локатор кнопки принятия куки (на основе скриншота)
-    # COOKIE_ACCEPT_BUTTON = (By.XPATH, "//button[@data-test-id='accept-cookies-button']")
-    COOKIE_ACCEPT_BUTTON = (By.XPATH, "//button[@data-test-id='accept-cookies-button']")
-
+    ORIGIN_SUGGEST = (By.XPATH, "//ul[@id='avia_form_origin-menu']")  #  Выпадающий список при вводе в поле Откуда
+    DESTINATION_SUGGEST = (By.CSS_SELECTOR, "ul.suggest__list li:first-child")  # Выпадающий список при вводе в поле Куда
+    PASSENGERS_INFO = (By.XPATH, "(//div[@data-test-id='trip-class-and-number-passengers'])[3]")  # Выпадающее меню с выбором количества пассажиров
+    
     def __init__(self, driver: WebDriver) -> None:
         self.driver = driver
-        self.wait = WebDriverWait(driver, 20)
+        self.wait = WebDriverWait(driver, 10)
 
     def open(self) -> None:
-        """ Открыть главную страницу"""
+        """ Открыть главную страницу
+        Метод включает в себя открытие главной страницы, принятие куки
+        """
         self.driver.get(base_url)
         # Ждем, пока страница загрузится (например, появится поле ввода)
         self.wait.until(
             EC.presence_of_element_located(self.SEARCH_BUTTON)
         )
-        # Сразу принимаем куки
+        # Принимаем куки
         self.accept_cookies()
 
     def accept_cookies(self):
-        """Принять куки, если есть баннер."""
+        """Принять куки, если есть баннер.
+        Метод инициирует принятие куки ,нажав на кнопку "Да без проблем"
+        """
         try:
-            # Пробуем найти кнопку принятия куки в течение 3 секунд
+            # Нажимаем на кнопку Да без проблем
             cookie_btn = self.wait.until(
                 EC.element_to_be_clickable(self.COOKIE_ACCEPT_BUTTON)
             )
@@ -64,19 +69,15 @@ class MainPage:
         except:
             return True  # Баннера нет - значит куки приняты
 
-    # Проверяем Куки
-    def get_cookie_value(self, cookie_name: str) -> dict:
-        """Получить значение куки"""
-        return self.driver.get_cookie(cookie_name)
-    
     def enter_origin(self, city: str) -> None:
         """ Ввести город вылета в поле Откуда"""
+        # Ожидаем пока поле Откуда станет кликабельным
         origin_field = self.wait.until(
             EC.element_to_be_clickable(self.ORIGIN_INPUT)
         )
 
-        # 2. Ждем, пока автоподстановка заполнит поле
-        #    Это заменяет time.sleep(1)
+        # Ждем, пока автоподстановка по геолокации заполнит поле
+        
         try:
             self.wait.until(
                 lambda driver: origin_field.get_attribute('value') != ''
@@ -110,18 +111,14 @@ class MainPage:
             try:
                 first_option = self.driver.find_element(*self.ORIGIN_SUGGEST)
                 first_option.click()
-                print("Выбран первый пункт списка")
             except:
                 origin_field.send_keys(Keys.RETURN)
-                print("Нажат Enter")
 
-    # Проверка поля Откуда
-    def get_origin_value(self) -> str:
-        """Получить значение из поля Откуда"""
+        # Получить значение из поля Откуда
         origin_field = self.wait.until(
             EC.presence_of_element_located(self.ORIGIN_INPUT)
         )
-        return origin_field.get_attribute('value')
+        assert origin_field.get_attribute('value') == city
 
     def enter_destination(self, city_destination):
         """Ввести город назначения."""
@@ -130,60 +127,17 @@ class MainPage:
         )
         dest_city.clear()
         dest_city.send_keys(city_destination)
-
-        # Диагностика
-        time.sleep(2)  # ждем появления списка
-
-        # Ищем все выпадающие списки
-        all_lists = self.driver.find_elements(By.TAG_NAME, "ul")
-        print(f"\n🔍 Найдено списков: {len(all_lists)}")
-
-        for i, ul in enumerate(all_lists[:10]):  # первые 10
-            ul_id = ul.get_attribute('id')
-            ul_class = ul.get_attribute('class')
-            ul_data_test = ul.get_attribute('data-test-id')
-            print(f"  Список {i}: id='{ul_id}', class='{ul_class[:30]}', data-test-id='{ul_data_test}'")
-
-        # Посмотрим первый пункт
+        
         try:
-            first_li = ul.find_element(By.TAG_NAME, "li")
-            print(f"    Первый пункт: '{first_li.text[:50]}'")
+            suggest = self.wait.until(
+                EC.element_to_be_clickable(self.DESTINATION_SUGGEST)
+            )
+            suggest.click()
         except:
-            pass
+            # Пока используем Enter
+            dest_city.send_keys(Keys.RETURN)
 
-        # Пока используем Enter
-        dest_city.send_keys(Keys.RETURN)
-
-        # # Ждем появления выпадающего списка
-        # self.wait.until(EC.element_to_be_clickable(self.DESTINATION_SUGGEST))  # или visibility_of_element_located
-
-        #  # Выбираем пункт с кодом KUF (Самара)
-        # try:
-        #     # Ищем элемент с кодом KUF
-        #     kuf_locator = (By.XPATH, "//li[contains(text(), 'KUF')]")
-        #     kuf_option = self.wait.until(
-        #         EC.element_to_be_clickable(kuf_locator)
-        #     )
-        #     kuf_option.click()
-        #     print("Выбран Самара (KUF)")
-        # except:
-        #     # Если не нашли KUF - первый пункт
-        #     try:
-        #         first_option = self.driver.find_element(*self.DESTINATION_SUGGEST)
-        #         first_option.click()
-        #         print("Выбран первый пункт списка")
-        #     except:
-        #         dest_field.send_keys(Keys.RETURN)
-        #         print("Нажат Enter")
-
-        # # Проверка поля Куда
-        # #  Получить значение из поля Куда
-        # dest_field = self.wait.until(
-        #     EC.presence_of_element_located(self.DESTINATION_INPUT)
-        # )
-        # return dest_field.get_attribute('value')
-
-    def enter_date_start(self, start_date):
+    def enter_date_start(self, start_date) -> str:
         date_start = self.wait.until(
             EC.element_to_be_clickable(self.DATE_START)
         )
@@ -194,113 +148,83 @@ class MainPage:
         day_button = self.wait.until(
             EC.element_to_be_clickable(button_locator)
         )
-
+        
         day_button.click()
-
-    """ Проверка поля дата вылета """
-    def get_start_date_value(self) -> str:
-        """Получить значение даты вылета"""
+        # Получить значение даты вылета
         date_field = self.wait.until(
             EC.presence_of_element_located(self.DATE_START)
         )
         return date_field.text
 
-    def enter_date_end(self, end_date):
+    def enter_date_end(self, end_date) -> str:
         """ Ввести дату прибытия"""
         date_end = self.wait.until(
             EC.element_to_be_clickable(self.DATE_END)
         )
         date_end.click()
         self.wait.until(EC.visibility_of_element_located(self.DATE_CALENDAR))
-        # Ищем родительскую кнопку (более надежно)
-        button_locator = (By.XPATH, f"//div[@data-test-id='date-{end_date}']/ancestor::button")
+        DATE_BUTTON_LOCATOR = (By.XPATH, f"//div[@data-test-id='date-{end_date}']/ancestor::button")
         day_button = self.wait.until(
-            EC.element_to_be_clickable(button_locator)
+            EC.element_to_be_clickable(DATE_BUTTON_LOCATOR)
         )
         day_button.click()
 
-    # Проверка поля дата прибытия
-    def get_end_date_value(self) -> str:
-        """Получить значение даты возвращения"""
+        # Получить значение даты возвращения
         date_field = self.wait.until(
             EC.presence_of_element_located(self.DATE_END)
         )
         return date_field.text
 
     def enter_search_btn(self):
-        """Нажать кнопку поиска билетов."""
+        """ Нажать кнопку поиска билетов. """
         search_btn = self.wait.until(
             EC.element_to_be_clickable(self.SEARCH_BUTTON)
         )
         search_btn.click()
 
-        # Добавить новые методы для проверок
-    
-    
-        
-    
-    
-    # def enter_destination(self, city):
-    #     """Ввести город назначения."""
-    #     dest_field = self.wait.until(
-    #         EC.element_to_be_clickable(self.DESTINATION_INPUT)
-    #     )
-    #     dest_field.clear()
-    #     dest_field.send_keys(city)
-        
-    #     try:
-    #         suggest = self.wait.until(
-    #             EC.element_to_be_clickable(self.DESTINATION_SUGGEST),
-    #         )
-    #         suggest.click()
-    #     except:
-    #         dest_field.send_keys(Keys.RETURN)
-        
-    # def select_dates(self, days_from_now=7, trip_days=7):
-    #     """
-    #     Выбор дат вылета и возвращения.
-        
-    #     Args:
-    #         days_from_now: через сколько дней вылет (по умолчанию 7)
-    #         trip_days: продолжительность поездки в днях (по умолчанию 7)
-    #     """
-    #     print(f"Выбираем даты: вылет через {days_from_now} дней, поездка на {trip_days} дней")
-        
-    #     # Рассчитываем даты
-    #     start_date = datetime.now() + timedelta(days=days_from_now)
-    #     end_date = start_date + timedelta(days=trip_days)
+        WebDriverWait(self.driver, 20).until(
+            lambda d: any(s in d.current_url for s in ("search", "params=", "aviasales")),
+            message="URL не обновился до страницы поиска/результатов за 20 с",
+        )
 
-    #     # Форматируем даты для отображения
-    #     start_date_str = start_date.strftime("%d %b")  # Например: "15 мар"
-    #     end_date_str = end_date.strftime("%d %b")
-        
-    #     print(f"Дата вылета: {start_date_str}, Дата возвращения: {end_date_str}")
-        
-    #     # Кликаем на поле даты вылета, чтобы открыть календарь
-    #     date_start_field = self.wait.until(
-    #         EC.element_to_be_clickable(self.DATE_START)
-    #     )
-    #     date_start_field.click()
-    #     time.sleep(1)
-        
-    #     # Выбираем дату вылета
-    #     self._select_date_in_calendar(start_date)
-        
-    #     # Выбираем дату возвращения
-    #     self._select_date_in_calendar(end_date)
+        # Проверить,что url теперь содержит "search"
+        current_url = self.driver.current_url
+        assert (
+            "search" in current_url or "aviasales" in current_url or "params=" in current_url
+        ), "Ожидалась страница поиска или главная"
 
-    # def _enter_date_manually(self, target_date):
-    #     """Запасной метод - ввод даты вручную."""
-    #     date_str = target_date.strftime("%d.%m.%Y")
+        self.switch_to_results_tab()
         
-    #     # Пробуем ввести в поле даты вылета
-    #     try:
-    #         date_field = self.driver.find_element(*self.DATE_START)
-    #         date_field.clear()
-    #         date_field.send_keys(date_str)
-    #         date_field.send_keys(Keys.RETURN)
-    #     except:
-    #         pass
+    def switch_to_results_tab(self):
+        """Переключиться на вкладку с результатами"""
+        if len(self.driver.window_handles) > 1:
+            self.driver.switch_to.window(self.driver.window_handles[-1])
 
-    # def click_search(self):
-    #     
+    def add_infant(self) -> str:
+        """ Добавить младенца в параметры поиска
+        Returns: текст с информацией о пассажирах
+        """
+        # 1. Открываем меню выбора пассажиров
+        passengers_field = self.wait.until(
+            EC.element_to_be_clickable(self.PASSENGERS_FIELD)
+        )
+        passengers_field.click()
+
+        # Нажимаем на кнопку + для младенцев
+        infant_plus = self.wait.until(
+            EC.element_to_be_clickable(self.INFANTS_PLUS_BUTTON)
+        )
+        infant_plus.click()
+
+        # Проверяем, что количество младенцев стало 1
+        passenger_info = self.wait.until(
+            EC.visibility_of_element_located(self.INFANTS_COUNS)
+        )
+        passenger_text = passenger_info.text
+
+        # Закрываем меню пассажиров (клик вне меню)
+        self.driver.find_element(By.TAG_NAME, "body").click()
+
+        return passenger_text
+    
+    
